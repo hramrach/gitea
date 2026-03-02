@@ -579,32 +579,28 @@ func deleteBranchInternal(ctx context.Context, doer *user_model.User, repo *repo
 		return false, fmt.Errorf("IsBranchExist: %w", err)
 	}
 
-	if branchCommit != nil {
-		// if the branch exists in git:
-		// * if active (not deleted) in DB, we need to mark it as deleted in DB and then delete the branch in git
-		// * if not active (not in db, or already marked as deleted), only need to delete the branch in git
-		if activeInDB {
-			if err := git_model.MarkBranchAsDeleted(ctx, repo.ID, branchName, doer.ID); err != nil {
-				return false, err
-			}
-		}
-		err := gitrepo.DeleteBranch(ctx, repo, branchName, true)
-		if err != nil {
-			return false, fmt.Errorf("DeleteBranch: %v", err)
-		}
-		return true, nil
-	}
-
-	// if the branch does not exist in git
-	// * if active in DB, we need to mark it as deleted in DB
-	// * if not active in DB, nothing to do
-	// in this case, return branchExists=activeInDB to indicate whether the branch exists in DB and is active, for consistency
+	// process the branch in db
 	if activeInDB {
 		if err := git_model.MarkBranchAsDeleted(ctx, repo.ID, branchName, doer.ID); err != nil {
 			return false, err
 		}
 	}
-	return activeInDB, nil
+
+	// process the branch in git
+	if branchCommit != nil {
+		err := gitrepo.DeleteBranch(ctx, repo, branchName, true)
+		if err != nil {
+			return false, fmt.Errorf("DeleteBranch: %v", err)
+		}
+		// since the branch exists in git, return branchExists=true
+		branchExists = true
+	} else {
+		// the branch does not exist in git, return activeInDB to indicate whether the branch was active in DB,
+		// for consistency with that the user had seen on the web ui or the branch list API.
+		branchExists = activeInDB
+	}
+
+	return branchExists, nil
 }
 
 // DeleteBranch delete branch
