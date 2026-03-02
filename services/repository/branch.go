@@ -575,7 +575,8 @@ func CanDeleteBranch(ctx context.Context, repo *repo_model.Repository, branchNam
 
 func deleteBranchInternal(ctx context.Context, doer *user_model.User, repo *repo_model.Repository, branchName string, branchCommit *git.Commit) (branchExists bool, err error) {
 	branchInDB, err := git_model.GetBranch(ctx, repo.ID, branchName)
-	if err != nil {
+	// branchInDB can be nil if the branch doesn't exist in DB
+	if err != nil && !errors.Is(err, util.ErrNotExist) {
 		return false, fmt.Errorf("GetBranch: %vc", err)
 	}
 
@@ -620,6 +621,7 @@ func DeleteBranch(ctx context.Context, doer *user_model.User, repo *repo_model.R
 	}
 
 	branchCommit, err := gitRepo.GetBranchCommit(branchName)
+	// branchCommit can be nil if the branch doesn't exist in git
 	if err != nil && !errors.Is(err, util.ErrNotExist) {
 		return err
 	}
