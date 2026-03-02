@@ -577,7 +577,7 @@ func deleteBranchInternal(ctx context.Context, doer *user_model.User, repo *repo
 	branchInDB, err := git_model.GetBranch(ctx, repo.ID, branchName)
 	// branchInDB can be nil if the branch doesn't exist in DB
 	if err != nil && !errors.Is(err, util.ErrNotExist) {
-		return false, fmt.Errorf("GetBranch: %vc", err)
+		return false, fmt.Errorf("GetBranch: %w", err)
 	}
 
 	activeInDB := branchInDB != nil && !branchInDB.IsDeleted
@@ -912,8 +912,13 @@ func DeleteBranchAfterMerge(ctx context.Context, doer *user_model.User, prID int
 	if errors.Is(err, util.ErrPermissionDenied) || errors.Is(err, util.ErrNotExist) {
 		return errFailedToDelete(err)
 	}
+	if err != nil {
+		return err
+	}
+
+	// intentionally ignore the following error, since the branch has already been deleted successfully
 	if err := issues_model.AddDeletePRBranchComment(ctx, doer, pr.BaseRepo, pr.Issue.ID, pr.HeadBranch); err != nil {
 		log.Error("AddDeletePRBranchComment: %v", err)
 	}
-	return err
+	return nil
 }
